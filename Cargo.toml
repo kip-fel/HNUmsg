@@ -7,18 +7,31 @@ description = "MCP server for querying Hunan University dormitory electricity"
 
 [dependencies]
 anyhow = "1"
+
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+schemars = "1.2"
+
 tokio = { version = "1", features = [
     "macros",
     "rt-multi-thread",
     "sync"
 ] }
-hnu_query = "=5.1.0"
+
+# 湖南大学校内系统接口
+# 开启 tracing，方便排查登录问题
+hnu_query = { version = "=5.1.0", features = ["tracing"] }
+
+# 我们自己处理 XGXT 的 HTTP → 307 → HTTPS 登录链路
+reqwest = "0.12"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
 rmcp = { version = "0.17", features = [
     "server",
     "macros",
     "schemars",
     "transport-io"
 ] }
-schemars = "1.2"

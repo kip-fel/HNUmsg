@@ -63,12 +63,18 @@ impl SessionManager {
                 personal_info,
                 ..
             } => {
-                if let Some(dormitory) = &personal_info.dormitory {
+                if let Some(dormitory) =
+                    &personal_info.dormitory
+                {
                     let park =
-                        dormitory.park().unwrap_or("未知园区");
+                        dormitory
+                            .park()
+                            .unwrap_or("未知园区");
 
                     let build =
-                        dormitory.build().unwrap_or("未知楼栋");
+                        dormitory
+                            .build()
+                            .unwrap_or("未知楼栋");
 
                     format!(
                         "已登录，宿舍：{} / {} / {}",
@@ -89,35 +95,51 @@ impl SessionManager {
         stu_id: &str,
         password: &str,
     ) -> Result<String> {
-        let _guard = self.auth_lock.lock().await;
+        let _guard =
+            self.auth_lock.lock().await;
 
         {
-            let state = self.state.read().await;
+            let state =
+                self.state.read().await;
 
-            if matches!(&*state, SessionState::Ready { .. }) {
-                return Ok("当前 Session 仍然有效".to_string());
+            if matches!(
+                &*state,
+                SessionState::Ready { .. }
+            ) {
+                return Ok(
+                    "当前 Session 仍然有效"
+                        .to_string()
+                );
             }
         }
 
-        let result = auth::login(stu_id, password).await?;
+        let result =
+            auth::login(stu_id, password).await?;
 
         match result {
             LoginResult::Ready(cas_token) => {
-                self.finish_login(cas_token).await?;
+                self.finish_login(
+                    cas_token
+                )
+                .await?;
 
-                Ok("登录成功".to_string())
+                Ok(
+                    "登录成功".to_string()
+                )
             }
 
             LoginResult::WaitingForSms {
                 token,
                 phone,
             } => {
-                let mut state = self.state.write().await;
+                let mut state =
+                    self.state.write().await;
 
-                *state = SessionState::WaitingForSms {
-                    token,
-                    phone: phone.clone(),
-                };
+                *state =
+                    SessionState::WaitingForSms {
+                        token,
+                        phone: phone.clone(),
+                    };
 
                 Ok(format!(
                     "需要短信验证码，验证码已发送到 {}",
@@ -131,27 +153,37 @@ impl SessionManager {
         &self,
         cas_token: CasToken,
     ) -> Result<()> {
+        // 按原作者的方式：
+        // 直接交给 hnu_query 处理 CAS → XGXT。
         let xgxt_token =
-            XgxtToken::acquire_by_cas_login(&cas_token)
-                .await
-                .map_err(|e| anyhow!("{}", e))?;
+            XgxtToken::acquire_by_cas_login(
+                &cas_token
+            )
+            .await
+            .map_err(|e| anyhow!("{}", e))?;
 
         let personal_info =
             get_person_info(&xgxt_token)
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
 
-        if let Some(dormitory) = &personal_info.dormitory {
-            validate_dormitory(dormitory)?;
+        if let Some(dormitory) =
+            &personal_info.dormitory
+        {
+            validate_dormitory(
+                dormitory
+            )?;
         }
 
-        let mut state = self.state.write().await;
+        let mut state =
+            self.state.write().await;
 
-        *state = SessionState::Ready {
-            cas_token,
-            xgxt_token,
-            personal_info,
-        };
+        *state =
+            SessionState::Ready {
+                cas_token,
+                xgxt_token,
+                personal_info,
+            };
 
         Ok(())
     }
@@ -160,44 +192,66 @@ impl SessionManager {
         &self,
         code: &str,
     ) -> Result<String> {
-        let _guard = self.auth_lock.lock().await;
+        let _guard =
+            self.auth_lock.lock().await;
 
         let token = {
-            let mut state = self.state.write().await;
+            let mut state =
+                self.state.write().await;
 
             match std::mem::replace(
                 &mut *state,
                 SessionState::LoggedOut,
             ) {
-                SessionState::WaitingForSms { token, .. } => token,
+                SessionState::WaitingForSms {
+                    token,
+                    ..
+                } => token,
 
                 other => {
                     *state = other;
 
-                    return Err(anyhow!(
-                        "当前没有等待短信验证码"
-                    ));
+                    return Err(
+                        anyhow!(
+                            "当前没有等待短信验证码"
+                        )
+                    );
                 }
             }
         };
 
-        match auth::verify_sms(token, code).await? {
-            SmsVerificationResult::Success(cas_token) => {
-                self.finish_login(cas_token).await?;
+        match auth::verify_sms(
+            token,
+            code
+        )
+        .await?
+        {
+            SmsVerificationResult::Success(
+                cas_token,
+            ) => {
+                self.finish_login(
+                    cas_token
+                )
+                .await?;
 
-                Ok("短信验证成功，登录完成".to_string())
+                Ok(
+                    "短信验证成功，登录完成"
+                        .to_string()
+                )
             }
 
             SmsVerificationResult::CodeError {
                 token,
                 phone,
             } => {
-                let mut state = self.state.write().await;
+                let mut state =
+                    self.state.write().await;
 
-                *state = SessionState::WaitingForSms {
-                    token,
-                    phone: phone.clone(),
-                };
+                *state =
+                    SessionState::WaitingForSms {
+                        token,
+                        phone: phone.clone(),
+                    };
 
                 Ok(format!(
                     "验证码错误。新的验证状态已保存，手机号：{}",
@@ -219,32 +273,49 @@ impl SessionManager {
         stu_id: &str,
         password: &str,
     ) -> Result<String> {
-        let _guard = self.auth_lock.lock().await;
+        let _guard =
+            self.auth_lock.lock().await;
 
         {
-            let mut state = self.state.write().await;
-            *state = SessionState::LoggedOut;
+            let mut state =
+                self.state.write().await;
+
+            *state =
+                SessionState::LoggedOut;
         }
 
-        let result = auth::login(stu_id, password).await?;
+        let result =
+            auth::login(
+                stu_id,
+                password
+            )
+            .await?;
 
         match result {
             LoginResult::Ready(cas_token) => {
-                self.finish_login(cas_token).await?;
+                self.finish_login(
+                    cas_token
+                )
+                .await?;
 
-                Ok("Session 已刷新，登录成功".to_string())
+                Ok(
+                    "Session 已刷新，登录成功"
+                        .to_string()
+                )
             }
 
             LoginResult::WaitingForSms {
                 token,
                 phone,
             } => {
-                let mut state = self.state.write().await;
+                let mut state =
+                    self.state.write().await;
 
-                *state = SessionState::WaitingForSms {
-                    token,
-                    phone: phone.clone(),
-                };
+                *state =
+                    SessionState::WaitingForSms {
+                        token,
+                        phone: phone.clone(),
+                    };
 
                 Ok(format!(
                     "刷新 Session 时需要短信验证码，验证码已发送到 {}",
@@ -254,33 +325,51 @@ impl SessionManager {
         }
     }
 
-    pub async fn electricity(&self) -> Result<String> {
+    pub async fn electricity(
+        &self,
+    ) -> Result<String> {
         let dormitory = {
-            let state = self.state.read().await;
+            let state =
+                self.state.read().await;
 
             match &*state {
                 SessionState::Ready {
                     personal_info,
                     ..
-                } => personal_info.dormitory.clone(),
+                } => {
+                    personal_info
+                        .dormitory
+                        .clone()
+                }
 
                 _ => {
-                    return Err(anyhow!(
-                        "当前尚未完成登录，请先调用 hnu_login"
-                    ));
+                    return Err(
+                        anyhow!(
+                            "当前尚未完成登录，请先调用 hnu_login"
+                        )
+                    );
                 }
             }
         };
 
-        let dormitory = dormitory.ok_or_else(|| {
-            anyhow!("学工系统没有返回宿舍信息")
-        })?;
+        let dormitory =
+            dormitory.ok_or_else(|| {
+                anyhow!(
+                    "学工系统没有返回宿舍信息"
+                )
+            })?;
 
-        electricity::get_electricity(dormitory).await
+        electricity::get_electricity(
+            dormitory
+        )
+        .await
     }
 
-    pub async fn dormitory_info(&self) -> Result<String> {
-        let state = self.state.read().await;
+    pub async fn dormitory_info(
+        &self,
+    ) -> Result<String> {
+        let state =
+            self.state.read().await;
 
         match &*state {
             SessionState::Ready {
@@ -298,10 +387,14 @@ impl SessionManager {
                         })?;
 
                 let park =
-                    dormitory.park().unwrap_or("未知");
+                    dormitory
+                        .park()
+                        .unwrap_or("未知");
 
                 let build =
-                    dormitory.build().unwrap_or("未知");
+                    dormitory
+                        .build()
+                        .unwrap_or("未知");
 
                 Ok(format!(
                     "园区：{}\n楼栋：{}\n房间：{}\n原始信息：{}",
@@ -312,25 +405,38 @@ impl SessionManager {
                 ))
             }
 
-            _ => Err(anyhow!(
-                "当前尚未完成登录"
-            )),
+            _ => Err(
+                anyhow!(
+                    "当前尚未完成登录"
+                )
+            ),
         }
     }
 }
 
-fn mask_phone(phone: &str) -> String {
-    let chars: Vec<char> = phone.chars().collect();
+fn mask_phone(
+    phone: &str,
+) -> String {
+    let chars: Vec<char> =
+        phone.chars().collect();
 
     if chars.len() < 7 {
         return "******".to_string();
     }
 
     let prefix: String =
-        chars[..3].iter().collect();
+        chars[..3]
+            .iter()
+            .collect();
 
     let suffix: String =
-        chars[chars.len() - 4..].iter().collect();
+        chars[chars.len() - 4..]
+            .iter()
+            .collect();
 
-    format!("{}****{}", prefix, suffix)
+    format!(
+        "{}****{}",
+        prefix,
+        suffix
+    )
 }

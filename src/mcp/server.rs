@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use rmcp::{
     handler::server::{tool::ToolRouter, wrapper::Parameters},
+    model::{ServerCapabilities, ServerInfo},
     tool,
     tool_handler,
     tool_router,
@@ -38,9 +39,13 @@ pub struct SmsCodeRequest {
 #[tool_router]
 impl HnuDormServer {
     pub fn new(session: Arc<SessionManager>) -> Self {
+        let tool_router = Self::tool_router();
+
+
+
         Self {
             session,
-            tool_router: Self::tool_router(),
+            tool_router,
         }
     }
 
@@ -159,5 +164,14 @@ impl HnuDormServer {
     }
 }
 
-#[tool_handler]
-impl ServerHandler for HnuDormServer {}
+#[tool_handler(router = self.tool_router)]
+impl ServerHandler for HnuDormServer {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo {
+            capabilities: ServerCapabilities::builder()
+                .enable_tools()
+                .build(),
+            ..Default::default()
+        }
+    }
+}
