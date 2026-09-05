@@ -15,9 +15,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Build
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Linux binary
         run: cargo build --release
 
       - name: Rename binary
