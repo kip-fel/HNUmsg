@@ -6,11 +6,9 @@ use hnu_query::{
     xgxt::{
         get_person_info,
         login::XgxtToken,
-        personal_info::{Dormitory, PersonalInfo},
+        personal_info::PersonalInfo,
     },
 };
-
-use crate::config::Config;
 
 use super::{
     auth::{self, LoginResult, SmsVerificationResult},
@@ -34,20 +32,14 @@ enum SessionState {
 }
 
 pub struct SessionManager {
-    config: Config,
-
     state: RwLock<SessionState>,
-
     auth_lock: Mutex<()>,
 }
 
 impl SessionManager {
-    pub fn new(config: Config) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
-
             state: RwLock::new(SessionState::LoggedOut),
-
             auth_lock: Mutex::new(()),
         }
     }
@@ -92,7 +84,11 @@ impl SessionManager {
         }
     }
 
-    pub async fn login(&self) -> Result<String> {
+    pub async fn login(
+        &self,
+        stu_id: &str,
+        password: &str,
+    ) -> Result<String> {
         let _guard = self.auth_lock.lock().await;
 
         {
@@ -103,7 +99,7 @@ impl SessionManager {
             }
         }
 
-        let result = auth::login(&self.config).await?;
+        let result = auth::login(stu_id, password).await?;
 
         match result {
             LoginResult::Ready(cas_token) => {
@@ -173,9 +169,7 @@ impl SessionManager {
                 &mut *state,
                 SessionState::LoggedOut,
             ) {
-                SessionState::WaitingForSms { token, .. } => {
-                    token
-                }
+                SessionState::WaitingForSms { token, .. } => token,
 
                 other => {
                     *state = other;
@@ -213,14 +207,18 @@ impl SessionManager {
 
             SmsVerificationResult::Expired => {
                 Ok(
-                    "短信验证码已过期，请重新调用登录流程"
+                    "短信验证码已过期，请重新调用 hnu_login"
                         .to_string()
                 )
             }
         }
     }
 
-    pub async fn refresh(&self) -> Result<String> {
+    pub async fn refresh(
+        &self,
+        stu_id: &str,
+        password: &str,
+    ) -> Result<String> {
         let _guard = self.auth_lock.lock().await;
 
         {
@@ -228,7 +226,7 @@ impl SessionManager {
             *state = SessionState::LoggedOut;
         }
 
-        let result = auth::login(&self.config).await?;
+        let result = auth::login(stu_id, password).await?;
 
         match result {
             LoginResult::Ready(cas_token) => {
@@ -257,45 +255,28 @@ impl SessionManager {
     }
 
     pub async fn electricity(&self) -> Result<String> {
-        if let Some(result) = self.try_electricity().await? {
-            return Ok(result);
-        }
-
-        self.login().await?;
-
-        if let Some(result) = self.try_electricity().await? {
-            return Ok(result);
-        }
-
-        Err(anyhow!(
-            "当前无法查询电量。请检查认证状态或调用 hnu_auth_status。"
-        ))
-    }
-
-    async fn try_electricity(&self) -> Result<Option<String>> {
-        let dormitory: Option<Dormitory> = {
+        let dormitory = {
             let state = self.state.read().await;
 
             match &*state {
                 SessionState::Ready {
                     personal_info,
                     ..
-                } => {
-                    personal_info.dormitory.clone()
-                }
+                } => personal_info.dormitory.clone(),
 
-                _ => None,
+                _ => {
+                    return Err(anyhow!(
+                        "当前尚未完成登录，请先调用 hnu_login"
+                    ));
+                }
             }
         };
 
-        let Some(dormitory) = dormitory else {
-            return Ok(None);
-        };
+        let dormitory = dormitory.ok_or_else(|| {
+            anyhow!("学工系统没有返回宿舍信息")
+        })?;
 
-        let result =
-            electricity::get_electricity(dormitory).await?;
-
-        Ok(Some(result))
+        electricity::get_electricity(dormitory).await
     }
 
     pub async fn dormitory_info(&self) -> Result<String> {
@@ -345,7 +326,9 @@ fn mask_phone(phone: &str) -> String {
         return "******".to_string();
     }
 
-    let prefix: String = chars[..3].iter().collect();
+    let prefix: String =
+        chars[..3].iter().collect();
+
     let suffix: String =
         chars[chars.len() - 4..].iter().collect();
 

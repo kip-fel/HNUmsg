@@ -11,15 +11,3 @@ pub fn validate_dormitory(dormitory: &Dormitory) -> Result<()> {
 
     Ok(())
 }
-
-pub fn describe_dormitory(dormitory: &Dormitory) -> String {
-    let park = dormitory.park().unwrap_or("未知园区");
-    let build = dormitory.build().unwrap_or("未知楼栋");
-
-    format!(
-        "{} / {} / {}",
-        park,
-        build,
-        dormitory.room()
-    )
-}

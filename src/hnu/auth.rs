@@ -5,8 +5,6 @@ use hnu_query::cas::{
     tfa::{SMSResult, TFAToken, VerifyResult},
 };
 
-use crate::config::Config;
-
 pub enum LoginResult {
     Ready(CasToken),
 
@@ -16,15 +14,21 @@ pub enum LoginResult {
     },
 }
 
-pub async fn login(config: &Config) -> Result<LoginResult> {
-    let result =
-        CasToken::acquire_by_login(&config.stu_id, &config.password)
-            .await;
+pub async fn login(stu_id: &str, password: &str) -> Result<LoginResult> {
+    let stu_id = stu_id.trim();
+
+    if stu_id.is_empty() {
+        return Err(anyhow!("学号不能为空"));
+    }
+
+    if password.is_empty() {
+        return Err(anyhow!("密码不能为空"));
+    }
+
+    let result = CasToken::acquire_by_login(stu_id, password).await;
 
     match result {
-        Ok(cas_token) => {
-            Ok(LoginResult::Ready(cas_token))
-        }
+        Ok(cas_token) => Ok(LoginResult::Ready(cas_token)),
 
         Err(hnu_query::Error::Other(AccountIssue::TFARequired(token))) => {
             let phone = token.phone().to_string();
@@ -35,14 +39,7 @@ pub async fn login(config: &Config) -> Result<LoginResult> {
                 .map_err(|e| anyhow!("{}", e))?;
 
             match sms_result {
-                SMSResult::Success => {
-                    Ok(LoginResult::WaitingForSms {
-                        token,
-                        phone,
-                    })
-                }
-
-                SMSResult::Valid => {
+                SMSResult::Success | SMSResult::Valid => {
                     Ok(LoginResult::WaitingForSms {
                         token,
                         phone,
@@ -50,16 +47,15 @@ pub async fn login(config: &Config) -> Result<LoginResult> {
                 }
 
                 SMSResult::Other(message) => {
-                    Err(anyhow!(
-                        "短信发送失败：{}",
-                        message
-                    ))
+                    Err(anyhow!("短信发送失败：{}", message))
                 }
             }
         }
 
         Err(hnu_query::Error::Other(AccountIssue::PasswordError)) => {
-            Err(anyhow!("湖南大学统一身份认证：用户名或密码错误"))
+            Err(anyhow!(
+                "湖南大学统一身份认证：用户名或密码错误"
+            ))
         }
 
         Err(hnu_query::Error::Other(

@@ -619,7 +619,6 @@ name = "hnu-dorm-mcp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "dotenvy",
  "hnu_query",
  "rmcp",
  "schemars",
