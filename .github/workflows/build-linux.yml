@@ -1,0 +1,30 @@
+name: Build Linux Binary
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Rename binary
+        run: cp target/release/hnu-dorm-mcp hnu-dorm-mcp-linux-x86_64
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: hnu-dorm-mcp-linux-x86_64
+          path: hnu-dorm-mcp-linux-x86_64
